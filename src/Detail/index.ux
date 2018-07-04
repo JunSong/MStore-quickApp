@@ -339,6 +339,7 @@
           var val = res.value;
           if(val){
             self.permissionsData = val;
+            self.permissionsData.noInited = false;
             self.dealPermission();
           }else{
             console.info('空数据')
