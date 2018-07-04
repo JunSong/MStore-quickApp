@@ -1,0 +1,197 @@
+<template>
+  <list class="tutorial-page" onscrollbottom="renderMoreListItem">
+    <block for="appList">
+      <list-item type="app" class="app-item">
+        <image src="{{$item.custom_icon}}" class="app-icon" @click='routeDetail($item.package_name,$item.id,$item.version_code)'></image>
+        <div class="app-info" @click='routeDetail($item.package_name,$item.id,$item.version_code)'>
+          <text class="app-name">{{$item.name}}</text>
+          <text class="app-desc">{{$item.recommend_desc}}</text>
+        </div>
+        <div class="app-btn" @click='installApp($item.package_name)'><text>安装</text></div>      
+      </list-item>
+    </block>
+
+    <list-item type="loadStatus" class="load-status">
+      <progress type="circular" show="{{hasMoreData}}"></progress>
+      <text show="{{hasMoreData}}">加载更多</text>
+      <text show="{{!hasMoreData}}">没有更多了~</text>
+    </list-item>
+  </list>
+</template>
+
+<style>
+  .tutorial-page {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  .app-item{
+    display: flex;
+    width: 1000px;
+    align-items: center;
+    margin: 5px 0px 5px 40px;
+  }
+  .app-icon{
+    width: 192px;
+    height: 192px;
+    margin-right: 8px;
+  }
+  .app-info{
+    flex-direction: column;
+    width: 642px;
+    margin-right: 8px;
+  }
+  .app-name{
+    font-size: 48px;
+  }
+  .app-desc{
+    font-size: 32px;
+  }
+  .app-btn{
+    width: 150px;
+    height: 72px;
+    background-color: #008cff;
+    border-radius: 72px;
+  }
+  .app-btn text{
+    font-size: 40px;
+    width: 100%;
+    text-align: center;
+    color: #ffffff;
+  }
+  .load-status{
+    display: flex;
+    justify-content: center;
+    margin: 5px;
+  }
+</style>
+
+<script>
+  import router from '@system.router'
+  import fetch from '@system.fetch'
+  import pkg from '@system.package'
+  // 内存中存储的列表数据
+  let memList = []
+
+  export default {
+    // 页面级组件的数据模型，影响传入数据的覆盖机制：private内定义的属性不允许被覆盖
+    private: {
+      title: '精品应用',
+      hasMoreData: true,
+      // 每次渲染的商品数
+      size: 10,
+      start: 0,
+      // 是否正在fetch请求数据
+      isLoadingData: false
+    },
+    protected: {
+      appList: [],
+      myData:null  //TODO 若是渲染的数据则不能赋值为null，否则渲染报错
+    },
+    onInit(){
+      this.loadAndRender(true);
+    },
+    callFetch(fn){
+      let self = this;
+      console.log(self.start,self.size);
+      fetch.fetch({
+        url:'https://open-app.meizu.com/mobile/public/index',
+        data:{
+          start: self.start,
+          max: self.size,
+          search: '',
+          _t : +new Date()
+        },
+        success: function (data) {
+          var res = JSON.parse(data.data);
+          self.myData = res.value.data;
+          console.log(JSON.stringify(res));
+          if(self.myData && self.myData.length){
+            fn&&fn(self.myData);
+          }else{
+            console.info('空数组')
+            fn&&fn([]);
+          }
+        },
+        fail: function (data, code) {
+          console.log(`handling fail, code = ${code}`)
+        }
+      })
+    },
+    loadAndRender (doRender = true) {
+      var self = this;
+      self.isLoadingData = true
+      // 重新请求数据并根据模式判断是否需要渲染列表
+      self.callFetch(function (resList) {
+        self.isLoadingData = false
+        if (!resList) {
+          console.error(`数据请求错误`)
+        }
+        else if (!resList.length) {
+          self.hasMoreData = false
+        }
+        else {
+          memList = memList.concat(resList);
+          if (doRender) {
+            self._renderList(resList.length)
+          }
+        }
+      }.bind(self))
+    },
+    _renderList (lastListLength) {
+      var self = this;
+      // 渲染列表
+      if (memList.length > 0) {
+        const list = memList.splice(0, this.size)
+        this.appList = this.appList.concat(list)
+      }
+      if (memList.length <= this.size) {
+        this.start += this.size;
+        this.size += lastListLength;
+      }
+    },
+    /**
+     * 滑动到底部时加载更多
+     */
+    renderMoreListItem () {
+      if (!this.isLoadingData) {
+        this.loadAndRender(true)
+      }
+    },
+    routeDetail (packageName, app_id, versionCode) {
+      // 跳转到应用内的某个页面，router用法详见：文档->接口->页面路由
+      router.push ({
+        uri: '/Detail',
+        params: {
+          packageName: packageName,
+          app_id: app_id,
+          versionCode: versionCode
+        }
+      })
+    },
+    hasInstalled(package_name){
+      pkg.hasInstalled({
+        package: package_name,
+        success: function (data) {
+          console.log(`handling success: ${data.result}`);
+          return data.result?'打开':'下载'
+        },
+        fail: function (data, code) {
+          console.log(`handling fail, code = ${code}`)
+        }
+      })
+    },
+    installApp(package_name){
+      pkg.install({
+        package: package_name,
+        success: function (data) {
+          console.log(`handling success: ${data.result}`)
+        },
+        fail: function (data, code) {
+          console.log(`handling fail, code = ${code}`)
+        }
+      })
+    }
+  }
+</script>
